@@ -7,3 +7,5 @@ When a lockdown was imposed, earlier in 2020, I am sure a lot of us lost the dis
 It was also compelling to see the flattening of the peak throughout the eight months of daylight savings time. This is particularly significant from the electricity suppliers' point of view.
 
 I have provided a detailed explanation of the code in the article [here](https://medium.com/analytics-vidhya/from-lockdown-to-daylight-savings-hidden-insights-from-electricity-demand-data-in-toronto-eff585aada66)
+
+A linear model using multiple linear regressions is built to predict the demand.
