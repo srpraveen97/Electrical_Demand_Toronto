@@ -8,4 +8,4 @@ It was also compelling to see the flattening of the peak throughout the eight mo
 
 I have provided a detailed explanation of the code in the article [here](https://medium.com/analytics-vidhya/from-lockdown-to-daylight-savings-hidden-insights-from-electricity-demand-data-in-toronto-eff585aada66)
 
-A linear model using multiple linear regressions is built to predict the demand.
+A linear model using multiple linear regressions is built to predict the demand. A detailed explanation for this is provided in the article [here](https://srpraveen1997.medium.com/keep-it-simple-keep-it-linear-a-linear-regression-model-for-time-series-5dbc83d89fc3)
