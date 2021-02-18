@@ -18,10 +18,8 @@ import sys
 import plotly.express as px
 import plotly.graph_objects as go
 
-mpl.rcParams['figure.figsize'] = (18,12)
-mpl.rcParams['axes.grid'] = False
-from matplotlib.axes._axes import _log as matplotlib_axes_logger
-matplotlib_axes_logger.setLevel('ERROR')
+import holidays
+
 sns.set()
 sns.set_style('whitegrid')
 
@@ -65,14 +63,22 @@ def postgresql_to_dataframe(conn, select_query, column_names):
     data = pd.DataFrame(tupples, columns=column_names)
     return data
 
-def my_data(data,pred_start):   
+def deal_with_holidays():
+    
+    holiday = holidays.Canada()
+    hol_list = holiday['2018':'2021']
+    for date in hol_list:
+        data.loc[datetime.strftime(date,'%Y-%m-%d'),'week_index'] = 'Weekened'
+
+def my_data(data,pred_start,last_date):   
     
     train_end = (datetime.strptime(pred_start,'%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
     
-    pred_day = data.loc[pred_start:]
+    pred_day = data.loc[pred_start:last_date]
     train_days = data.loc[:train_end]   
     
     return pred_day,train_days
+    
 
 def predict(data,group_by,ridge_coef):
     """
@@ -132,55 +138,52 @@ def pred_interval(prediction,test_data,test_predictions,alpha=0.95):
 
 conn = connect(param_dic)
 
-column_names = ['timestamp', 'temperature', 'demand', 'year', 'month', 'dayofweek',
-       'day', 'hour', 'temp_index', 'week_index', 'temp_pred',
-       'temp_pred_index']
+column_names = ['timestamp', 'hour', 'temp_index', 'week_index', 'temperature', 'demand']
 
-data = postgresql_to_dataframe(conn, "select * from demand_data", column_names)
+query = ("SELECT temp_data.timestamp,hour,temp_index,week_index,temperature,demand_data.demand" 
+         " FROM temp_data LEFT JOIN demand_data ON temp_data.timestamp = demand_data.timestamp"
+         " ORDER BY timestamp")
+
+
+data = postgresql_to_dataframe(conn, query, column_names)
 data.set_index('timestamp',inplace=True)
 
-last_date = data.reset_index().iloc[-1]['timestamp'].strftime('%Y-%m-%d')
+deal_with_holidays()
 
-ten_days = (datetime.strptime(last_date,'%Y-%m-%d') - timedelta(days=10)).strftime('%Y-%m-%d')
-    
-        
+# data.fillna('ffill',inplace=True)   
 
 cols = st.beta_columns(2)
 
 cols[1].write("""
-         # Predicting Toronto's Electricity Demand
+          # Predicting Toronto's Electricity Demand
          
-         ## Using the powers of only Simple Linear Regression!
-         """)
+          ## Using the powers of only Simple Linear Regression!
+          """)
          
 
 cols[0].image('toronto.jpg')
 
 st.write("""
-         #### Hi There! Welcome!
-         """)
+          #### Hi There! Welcome!
+          """)
 
 st.write("""
-         Do you want to predict Toronto's electricity consumption and are scared
-         of big words like SARIMA(X) and neural networks?  
-         """)
+          Do you want to predict Toronto's electricity consumption and are scared
+          of big words like SARIMA(X) and neural networks? Fear not! I have only used linear regression here.
+          """)
          
 st.write("""
-         Fear not! I have only used linear regression here. 
-         "But Hey! How well can a linear model perform?", you ask. 
-         Well, I have shown predictions for three previous days. 
-         """)         
+          How many days of data would you like to see?
+          """)
+          
+option = st.slider("",1,10,1) 
 
-st.write("""
-         Feel free to play around with the buttons below and see it 
-         for yourself!
-         """)
-         
-pred_start = st.text_input(f"Enter a date in yyyy-mm-dd (After {ten_days})", '2021-02-11')          
+pred_start = (datetime.today() - timedelta(days=option)).strftime('%Y-%m-%d')
+last_date = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
 
 with st.spinner('Loading your plot...'):
  
-    pred_day,train_days = my_data(data,pred_start)
+    pred_day,train_days = my_data(data,pred_start,last_date)
     
     
     groupby_list = list(data.groupby(['temp_index','hour','week_index']).groups.keys())
@@ -204,7 +207,7 @@ with st.spinner('Loading your plot...'):
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(x = pd.Series.append(timestamp,timestamp[::-1]), y = pd.Series.append(upper_pred,lower_pred[::-1]), fill='toself',
-                             fillcolor='rgba(0,176,246,0.1)',line = dict(color='rgba(0,176,246,0.2)', width=2),name='Forecase Interval'))
+                              fillcolor='rgba(0,176,246,0.1)',line = dict(color='rgba(0,176,246,0.2)', width=2),name='Forecase Interval'))
     fig.add_trace(go.Scatter(x = timestamp, y = actual_demand, name='True Value',line = dict(color='black', width=2)))
     fig.add_trace(go.Scatter(x = timestamp, y = actual_pred,mode='lines',name='Forecast',line = dict(color='goldenrod', width=2,dash='dash')))
     fig.update_layout(template="simple_white",title=f"Electricity Demand predictions from {pred_start} to {last_date}")
