@@ -59,27 +59,6 @@ def sql_demand_update():
     
     data['timestamp'] = pd.to_datetime(data['timestamp'])
     
-    # data = data.set_index('timestamp')
-    
-    # def weekday_(x):
-    #     """
-    #     Divides the dataset into two categories based on the day of the week
-    #     """
-    #     if x >= 5:
-    #         return 'Weekend'
-    #     else:
-    #         return 'Weekday'
-    
-    # data['year'] = data.index.year
-    # data['month'] = data.index.month
-    # data['dayofweek'] = data.index.dayofweek
-    # data['day'] = data.index.day
-    # data['hour'] = data.index.hour
-    # data['week_index'] = data['dayofweek'].apply(weekday_)
-    
-    # data = data.reset_index()
-    
-    
     param_dic = {
         "host"      : "localhost",
         "database"  : "demand",

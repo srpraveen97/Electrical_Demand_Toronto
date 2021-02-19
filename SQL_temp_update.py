@@ -59,10 +59,16 @@ def sql_temp_update():
     delta = math.floor(((datetime.today() - data['timestamp'].iloc[-1]).total_seconds())/3600)
     status = True
     
+    options = webdriver.ChromeOptions();
+    options.add_argument('headless');
+    
     if delta >= 1:
         
         while status:
-            driver = webdriver.Chrome('D:\\Personal_projects\\Toronto_Electrical_Demand_Analysis\\chromedriver')
+            
+            print('Collecting data.........')
+            
+            driver = webdriver.Chrome('chromedriver.exe')
             driver.get("https://toronto.weatherstats.ca/download.html")
             
             driver.find_element_by_xpath('/html/body/div[2]/div/form/label[2]/input').click()
@@ -156,5 +162,6 @@ def sql_temp_update():
         copy_from_file(conn, df, 'temp_data')
         
         os.remove('C:\\Users\\srpra\\Downloads\\weatherstats_toronto_hourly.csv')
+        os.remove("tmp_dataframe.csv")
     
         

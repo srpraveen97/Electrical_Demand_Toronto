@@ -9,8 +9,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime,timedelta
-import pytz
-import time
 
 import psycopg2
 import sys
@@ -19,6 +17,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 import holidays
+
+# from SQL_demand_update import *
+# from SQL_temp_update import *
+# from temppred_toSQL import *
 
 sns.set()
 sns.set_style('whitegrid')
@@ -70,11 +72,11 @@ def deal_with_holidays():
     for date in hol_list:
         data.loc[datetime.strftime(date,'%Y-%m-%d'),'week_index'] = 'Weekened'
 
-def my_data(data,pred_start,last_date):   
+def my_data(data,pred_start):   
     
     train_end = (datetime.strptime(pred_start,'%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
     
-    pred_day = data.loc[pred_start:last_date]
+    pred_day = data.loc[pred_start:]
     train_days = data.loc[:train_end]   
     
     return pred_day,train_days
@@ -120,21 +122,20 @@ def Ridge_model(data):
     model = Ridge().fit(x, y)
     return (round(float(model.intercept_),3),round(float(model.coef_),3))
 
-def pred_interval(prediction,test_data,test_predictions,alpha=0.95):
+def pred_interval(prediction,test_data,test_predictions,last_date,alpha=0.95):
     """
     Obtain the prediction interval for each of the prediction
     Input: single prediction, entire test data, test set predictions
     Output: Prediction intervals and the actual prediction
     """
-    y_test = test_data['demand']
-    test_predictions = np.array(test_predictions)
+    y_test = test_data['demand'][:last_date]
+    test_predictions = np.array(test_predictions[:test_data['demand'][:last_date].shape[0]])
     err = np.sum(np.square((y_test - test_predictions)))
     std = np.sqrt((1 / (y_test.shape[0] - 2)) * err)
     z = stats.norm.ppf(1 - (1-alpha)/2)
     interval = z*std
     
     return [float(prediction-interval),float(prediction),float(prediction+interval)]
-
 
 conn = connect(param_dic)
 
@@ -148,9 +149,19 @@ query = ("SELECT temp_data.timestamp,hour,temp_index,week_index,temperature,dema
 data = postgresql_to_dataframe(conn, query, column_names)
 data.set_index('timestamp',inplace=True)
 
-deal_with_holidays()
+deal_with_holidays() 
 
-# data.fillna('ffill',inplace=True)   
+query_1 = ("SELECT timestamp,hour,temp_index,week_index,temperature FROM temp_pred"
+         " WHERE time_collected IN (SELECT time_collected FROM temp_pred"
+		   " GROUP BY time_collected"
+	      " ORDER BY time_collected DESC LIMIT 1)")
+
+column_names_1 = ['timestamp', 'hour', 'temp_index', 'week_index', 'temperature']
+    
+temp_pred_data = postgresql_to_dataframe(conn, query_1, column_names_1)  
+
+temp_pred_data['demand'] = 'NaN'
+temp_pred_data.set_index('timestamp',inplace=True) 
 
 cols = st.beta_columns(2)
 
@@ -180,11 +191,15 @@ option = st.slider("",1,10,1)
 
 pred_start = (datetime.today() - timedelta(days=option)).strftime('%Y-%m-%d')
 last_date = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+last_pred = (datetime.today() + timedelta(days=1)).strftime('%Y-%m-%d')
 
 with st.spinner('Loading your plot...'):
  
-    pred_day,train_days = my_data(data,pred_start,last_date)
+    pred_day,train_days = my_data(data,pred_start)
     
+    date_1 = datetime.strftime(pred_day.reset_index().iloc[-1]['timestamp'] + timedelta(seconds=3600), '%Y-%m-%d %H:00:00')
+    
+    pred_day = pred_day.append(temp_pred_data.loc[date_1:])
     
     groupby_list = list(data.groupby(['temp_index','hour','week_index']).groups.keys())
     ridge_coef_3 = train_days.groupby(['temp_index','hour','week_index']).apply(Ridge_model) 
@@ -195,7 +210,7 @@ with st.spinner('Loading your plot...'):
     
     prediction_interval_3 = []
     for i in range(pred_day.shape[0]):
-        prediction_interval_3.append(pred_interval(demand_hat_3[i],pred_day,demand_hat_3))
+        prediction_interval_3.append(pred_interval(demand_hat_3[i],pred_day,demand_hat_3,last_date))
     pred_int_3 = pd.DataFrame(prediction_interval_3,columns=['Lower','Actual','Upper'])
     
     
@@ -206,11 +221,11 @@ with st.spinner('Loading your plot...'):
     actual_demand = pred_day.reset_index()['demand']
     
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x = pd.Series.append(timestamp,timestamp[::-1]), y = pd.Series.append(upper_pred,lower_pred[::-1]), fill='toself',
-                              fillcolor='rgba(0,176,246,0.1)',line = dict(color='rgba(0,176,246,0.2)', width=2),name='Forecase Interval'))
+    # fig.add_trace(go.Scatter(x = pd.Series.append(timestamp,timestamp[::-1]), y = pd.Series.append(upper_pred,lower_pred[::-1]), fill='toself',
+                              # fillcolor='rgba(0,176,246,0.1)',line = dict(color='rgba(0,176,246,0.2)', width=2),name='Forecase Interval'))
     fig.add_trace(go.Scatter(x = timestamp, y = actual_demand, name='True Value',line = dict(color='black', width=2)))
     fig.add_trace(go.Scatter(x = timestamp, y = actual_pred,mode='lines',name='Forecast',line = dict(color='goldenrod', width=2,dash='dash')))
-    fig.update_layout(template="simple_white",title=f"Electricity Demand predictions from {pred_start} to {last_date}")
+    fig.update_layout(template="simple_white",title=f"Electricity Demand predictions from {pred_start} to {last_pred}")
     fig.update_yaxes(title_text="Electricity Demand (MWh)")
     fig.update_xaxes(title_text="Time")
     
